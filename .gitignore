@@ -1,0 +1,12 @@
+/Bio resources/
+/Econ resources/
+/tmp/
+/test-results/
+/dist/
+/QB/resources/
+/QB/tmp/
+/QB/test-results/
+/QB/dist/
+/QB/node_modules/
+*.log
+.DS_Store
