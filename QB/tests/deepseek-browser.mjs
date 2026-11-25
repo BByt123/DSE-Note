@@ -19,7 +19,7 @@ await page.addInitScript(()=>{
   const url=typeof input==='string'?input:input.url;
   if(url==='https://api.deepseek.com/chat/completions'){
    window.__deepseekCalls.push(JSON.parse(options.body));
-   return Promise.resolve(new Response(JSON.stringify({choices:[{message:{content:'This HKDSE explanation follows the supplied answer and marking scheme.'}}]}),{status:200,headers:{'Content-Type':'application/json'}}));
+   return Promise.resolve(new Response(JSON.stringify({choices:[{message:{content:'## Key idea\n\n**This HKDSE explanation** follows the supplied answer and marking scheme.\n\n* First reason\n* Second reason.'}}]}),{status:200,headers:{'Content-Type':'application/json'}}));
   }
   return originalFetch(input,options);
  };
@@ -78,6 +78,11 @@ try{
  assert.equal(await page.locator('[data-action="add-wrong-answer-to-paper"]').textContent(),'Wrong answer added');
  await page.getByRole('button',{name:/Ask AI for explanation/}).click();
  await page.locator('.ai-chat-message.assistant').waitFor();
+ const formattedExplanation=page.locator('.ai-chat-message.assistant .ai-message-content').first();
+ await formattedExplanation.locator('h4').waitFor();
+ assert.equal(await formattedExplanation.locator('strong').textContent(),'This HKDSE explanation');
+ assert.equal(await formattedExplanation.locator('li').count(),2);
+ assert.doesNotMatch(await formattedExplanation.innerText(),/##|\*\*|\* First reason/);
  let call=await page.evaluate(()=>window.__deepseekCalls.at(-1));
  assert.match(call.messages[0].content,/HKDSE Biology/);
  assert.match(call.messages[1].content,/why the keyed answer is correct/);

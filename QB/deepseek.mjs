@@ -10,6 +10,50 @@ function boundedText(value,maximum){
  return text.length>maximum?`${text.slice(0,maximum)}\n[Content shortened]`:text;
 }
 
+function formatInlineMarkdown(value){
+ const code=[];
+ let html=escapeHtml(value).replace(/`([^`\n]+)`/g,(_match,text)=>{
+  const index=code.push(text)-1;
+  return `\u0000${index}\u0000`;
+ });
+ html=html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+ html=html.replace(/__(.+?)__/g,'<strong>$1</strong>');
+ html=html.replace(/(?<!\*)\*([^\s*](?:[^*\n]*[^\s*])?)\*(?!\*)/g,'<em>$1</em>');
+ html=html.replace(/(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])/g,'<em>$1</em>');
+ return html.replace(/\u0000(\d+)\u0000/g,(_match,index)=>`<code>${code[Number(index)]}</code>`);
+}
+
+export function formatExplanation(value){
+ const output=[],paragraph=[],code=[];
+ let list='',inCode=false;
+ const closeList=()=>{if(list){output.push(`</${list}>`);list='';}};
+ const flushParagraph=()=>{if(paragraph.length){output.push(`<p>${formatInlineMarkdown(paragraph.join(' '))}</p>`);paragraph.length=0;}};
+ const flushCode=()=>{output.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);code.length=0;};
+
+ for(const line of String(value??'').replace(/\r\n?/g,'\n').split('\n')){
+  if(inCode){if(/^\s*```/.test(line)){flushCode();inCode=false;}else code.push(line);continue;}
+  if(/^\s*```/.test(line)){flushParagraph();closeList();inCode=true;continue;}
+  const heading=line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+  const unordered=line.match(/^\s*[*+-]\s+(.+)$/);
+  const ordered=line.match(/^\s*\d+[.)]\s+(.+)$/);
+  if(!line.trim()){flushParagraph();closeList();continue;}
+  if(heading){flushParagraph();closeList();const tag=heading[1].length===1?'h3':heading[1].length===2?'h4':'h5';output.push(`<${tag}>${formatInlineMarkdown(heading[2])}</${tag}>`);continue;}
+  if(/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)){flushParagraph();closeList();output.push('<hr>');continue;}
+  if(unordered||ordered){
+   flushParagraph();
+   const nextList=unordered?'ul':'ol';
+   if(list!==nextList){closeList();output.push(`<${nextList}>`);list=nextList;}
+   output.push(`<li>${formatInlineMarkdown((unordered||ordered)[1])}</li>`);
+   continue;
+  }
+  closeList();paragraph.push(line.trim());
+ }
+
+ flushParagraph();closeList();
+ if(inCode)flushCode();
+ return output.join('');
+}
+
 function initialExplanationPrompt(question,answer){
  const parts=[
   `Question type: ${question.type||'Unspecified'}`,
@@ -103,7 +147,7 @@ export function createDeepSeekTutor({subject,getQuiz,getQuestion,getApiKey,saveQ
   const error=errors.get(question.id)||'';
   if(!getApiKey())return `<section class="ai-tutor"><div class="ai-tutor-heading"><h3>AI tutor</h3><span>English · HKDSE ${escapeHtml(subject)}</span></div><p class="quiet">Save a DeepSeek API key to ask for an English HKDSE ${escapeHtml(subject)} explanation.</p><button class="button secondary" data-action="ai-settings"><i data-lucide="settings-2" aria-hidden="true"></i>Open settings</button></section>`;
   const heading=question.type==='MC'?'Explain the correct option and why each other option is wrong.':'Ask for step-by-step guidance on how to approach this HKDSE question.';
-  const conversation=messages.map(message=>`<div class="ai-chat-message ${message.role==='assistant'?'assistant':'student'}"><span>${message.role==='assistant'?'AI tutor':'You'}</span><p class="ai-message-content">${escapeHtml(message.content)}</p></div>`).join('');
+  const conversation=messages.map(message=>`<div class="ai-chat-message ${message.role==='assistant'?'assistant':'student'}"><span>${message.role==='assistant'?'AI tutor':'You'}</span><div class="ai-message-content">${message.role==='assistant'?formatExplanation(message.content):`<p>${escapeHtml(message.content)}</p>`}</div></div>`).join('');
   return `<section class="ai-tutor" aria-label="AI tutor"><div class="ai-tutor-heading"><h3>AI tutor</h3><span>English · HKDSE ${escapeHtml(subject)}</span></div>${conversation?`<div class="ai-chat" aria-live="polite">${conversation}${busy?'<p class="ai-loading" role="status"><span class="spinner"></span>Preparing an English explanation...</p>':''}</div>`:''}${error?`<p class="ai-error" role="alert">${escapeHtml(error)}</p><button class="text-button" data-action="ai-retry" data-id="${escapeHtml(question.id)}" ${busy?'disabled':''}>Try again</button>`:''}${messages.length?`<form class="ai-chat-form" data-form="ai-chat" data-id="${escapeHtml(question.id)}"><label for="ai-follow-up-${escapeHtml(question.id)}">Ask a follow-up question</label><textarea id="ai-follow-up-${escapeHtml(question.id)}" name="message" rows="2" maxlength="2000" placeholder="Ask how to apply a concept or improve your answer..." ${busy?'disabled':''} required></textarea><button class="button secondary" type="submit" ${busy?'disabled':''}><i data-lucide="send" aria-hidden="true"></i>Send</button></form>`:`<p class="quiet">${heading}</p><button class="button secondary" data-action="ai-start" data-id="${escapeHtml(question.id)}" ${busy?'disabled':''}><i data-lucide="sparkles" aria-hidden="true"></i>Ask AI for explanation</button>${busy?'<p class="ai-loading" role="status"><span class="spinner"></span>Preparing an English explanation...</p>':''}`}</section>`;
  }
 

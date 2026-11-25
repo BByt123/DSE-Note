@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {clearDeepSeekApiKey,createDeepSeekTutor,readDeepSeekApiKey,requestDeepSeekExplanation,saveDeepSeekApiKey} from '../deepseek.mjs';
+import {clearDeepSeekApiKey,createDeepSeekTutor,formatExplanation,readDeepSeekApiKey,requestDeepSeekExplanation,saveDeepSeekApiKey} from '../deepseek.mjs';
 import {restoreQuiz} from '../lib.mjs';
 
 test('DeepSeek API keys are saved locally and migrate from the unfinished Biology setting',()=>{
@@ -36,6 +36,19 @@ test('DeepSeek prompts enforce English HKDSE subject guidance and include answer
  for(const option of ['A. Breathing','B. Sweating','C. Eating','D. Digestion'])assert.ok(body.messages[1].content.includes(option));
  assert.equal(body.messages.at(-1).content,'Why is breathing wrong?');
  assert.equal(response,'Sweating removes metabolic waste products from the body.');
+});
+
+test('DeepSeek Markdown becomes readable, compact headings and lists without exposing HTML',()=>{
+ const html=formatExplanation('## Key idea\n\n**Correct option.** It matches *the HKDSE concept*.\n\n* First reason\n* Second reason\n\n1. Explain the evidence.\n2. Link it to the answer.\n\n`Q = mc`\n\n<img src=x onerror=alert(1)>');
+ assert.match(html,/<h4>Key idea<\/h4>/);
+ assert.match(html,/<strong>Correct option\.<\/strong>/);
+ assert.match(html,/<em>the HKDSE concept<\/em>/);
+ assert.match(html,/<ul><li>First reason<\/li><li>Second reason<\/li><\/ul>/);
+ assert.match(html,/<ol><li>Explain the evidence\.<\/li><li>Link it to the answer\.<\/li><\/ol>/);
+ assert.match(html,/<code>Q = mc<\/code>/);
+ assert.match(html,/&lt;img src=x onerror=alert\(1\)&gt;/);
+ assert.doesNotMatch(html,/<img src=x/);
+ assert.doesNotMatch(html,/##|\*\*|\* First reason/);
 });
 
 test('written-question prompts give marking-scheme-based HKDSE guidance in English',async()=>{
