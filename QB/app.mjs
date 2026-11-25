@@ -4,6 +4,7 @@ import {exportPaper,exportSourcePdf,downloadBlob,chooseSaveLocation} from './exp
 import {CHAPTERS,canonicalTopic,topicLabel,topicOrder} from './taxonomy.mjs';
 import {language,theme,setLanguage,applyTheme,localize,translate} from './preferences.mjs';
 import {renderWordPreview,renderWordTextPreview} from './word-preview.mjs';
+import {bindDeepSeekControls,createDeepSeekTutor,deepSeekSettingsMarkup,readDeepSeekApiKey} from './deepseek.mjs';
 
 const $=selector=>document.querySelector(selector);
 const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
@@ -22,8 +23,12 @@ let sourceFilters={search:'',topic:'',publisher:''};
 let toastTimer,searchTimer;
 let paperTitle='Biology practice paper',paperAnswers=false;
 let askSaveLocation=false;
+let deepSeekApiKey='';
 try{paperTitle=readStored('biology-paper-title') || paperTitle;}catch{}
 try{askSaveLocation=typeof window.showSaveFilePicker==='function' && readStored('biology-ask-save-location')==='true';}catch{}
+try{deepSeekApiKey=readDeepSeekApiKey();}catch{}
+const aiTutor=createDeepSeekTutor({subject:'Biology',getQuiz:()=>quiz,getQuestion:id=>effective(questionsById.get(id)),getApiKey:()=>deepSeekApiKey,saveQuiz,renderActiveQuiz:()=>{if(view==='quiz'&&quiz)renderActiveQuiz();}});
+bindDeepSeekControls({tutor:aiTutor,setApiKey:value=>{deepSeekApiKey=value;},openSettings:()=>navigate('settings'),refreshSettings:()=>{renderSettings();icons();},notify:toast});
 const effective=q=>{const result={...q,...Object.fromEntries(Object.entries(personal.overrides[q.id] || {}).filter(([,v])=>v))};result.topic=canonicalTopic(result.topic);return result;};
 const icons=()=>{window.lucide?.createIcons();localize();};
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),4500);}
@@ -263,6 +268,9 @@ function updateAnswered(){
 }
 function quizResponse(q){return String(quiz?.responses?.[q.id] || '').trim();}
 function quizFeedbackVisible(q){return Boolean(quiz?.finished || (quiz?.mode==='exercise' && quizResponse(q)));}
+function aiTutorMarkup(q){
+ return aiTutor.markup(q);
+}
 function quizReviewMarkup(q,reveal){
  const max=Number.isFinite(Number(q.marks)) && Number(q.marks)>0?Number(q.marks):'';
  return `<div id="quiz-feedback" class="quiz-review" ${reveal?'':'hidden'}><h3>${q.type==='MC'?(q.answer?`Correct answer: ${e(q.answer)}`:'Answer key'):'Marking scheme'}</h3>${q.type!=='MC'?`<label class="mark-input">Awarded mark${max?` (out of ${max})`:''}<input id="written-mark" type="number" min="0" ${max?`max="${max}"`:''} step="1" value="${quiz.marks?.[q.id] ?? ''}" aria-label="Awarded mark"></label><p class="quiet">Written answers are self-assessed against the marking scheme.</p>`:''}<div id="quiz-answer-render" class="question-render"></div></div>`;
@@ -299,6 +307,7 @@ function renderQuiz(){
   window.lucide?.createIcons();
   renderQuestion($('#quiz-render'),q,sourcesById.get(q.sourceId));
   if(reveal){const review=$('#quiz-feedback');if(review)review.dataset.rendered='true';renderQuestion($('#quiz-answer-render'),q,sourcesById.get(q.sourceId),true);}
+  const aiPlacement=q.type==='MC'?'#quiz-feedback':'.quiz-question-footer';$(aiPlacement)?.insertAdjacentHTML(q.type==='MC'?'beforeend':'beforebegin',aiTutorMarkup(q));icons();
  }
  function showQuizFeedback(){
   const q=quizQuestions()[quiz?.current];if(!q || !quizFeedbackVisible(q))return;
@@ -333,6 +342,7 @@ function renderSourceResults(search){
 function renderSettings(){
  $('#main').innerHTML=`<section class="page-heading"><div><div class="eyebrow">YOUR WORKSPACE</div><h1>Settings & backup</h1><p>Keep your study library close.</p></div></section><section class="settings-section"><div><h2>Personal library</h2><p>Bookmarks, collections, categories and quiz history.</p></div><div class="settings-actions"><button class="button primary" data-action="backup">${icon('download')}Export backup</button><label class="button secondary file-button">${icon('upload')}Import backup<input id="import-backup" type="file" accept=".json,application/json"></label></div></section><section class="settings-section"><div><h2>Library details</h2><p>${bank.questions.length.toLocaleString()} questions · ${bank.sources.length} source documents · ${bank.topics.length} topics</p><p>Last indexed ${e(new Date(bank.generated).toLocaleDateString())}</p></div><span class="version-label">Version 1.0</span></section><section class="settings-section"><div><h2>Device data</h2><p>${personal.bookmarks.length} saved questions · ${personal.collections.length} collections · ${personal.history.length} completed sessions</p></div><button class="button danger" data-action="reset-data">${icon('trash-2')}Reset personal data</button></section>`;
  $('#main .page-heading').insertAdjacentHTML('afterend',`<section class="settings-section"><div><h2>Display preferences</h2><p>Question text stays in its original language.</p></div><div class="settings-preferences"><label>Language<select id="settings-language"><option value="en" ${language==='en'?'selected':''}>English</option><option value="zh" ${language==='zh'?'selected':''}>繁體中文</option></select></label><label>Appearance<select id="settings-theme">${['light','dark','system'].map(value=>`<option value="${value}" ${theme===value?'selected':''}>${value[0].toUpperCase()+value.slice(1)}</option>`).join('')}</select></label></div></section>`);
+ $('#main .page-heading').insertAdjacentHTML('afterend',deepSeekSettingsMarkup(Boolean(deepSeekApiKey)));
 }
 function navigate(target,id=''){
  closeNavigation();

@@ -17,7 +17,7 @@ const siteEntries = [
   'biology-index.html', 'app.mjs', 'biology',
   'economics.html', 'economics-app.mjs', 'economics',
   'lib.mjs', 'rendering.mjs', 'word-preview.mjs', 'exports.mjs',
-  'preferences.mjs', 'taxonomy.mjs', 'assets', 'vendor', 'bank',
+  'preferences.mjs', 'taxonomy.mjs', 'deepseek.mjs', 'assets', 'vendor', 'bank',
 ];
 
 await rm(destination, {recursive: true, force: true});

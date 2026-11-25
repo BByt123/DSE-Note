@@ -2,6 +2,7 @@ import {TYPES,escapeHtml as e,filterQuestions,sampleQuestions,scoreQuiz,restoreQ
 import {language,theme,setLanguage,applyTheme,translate} from './preferences.mjs';
 import {exportPaper,exportSourcePdf,downloadBlob,chooseSaveLocation} from './exports.mjs';
 import {renderWordTextPreview} from './word-preview.mjs';
+import {bindDeepSeekControls,createDeepSeekTutor,deepSeekSettingsMarkup,readDeepSeekApiKey} from './deepseek.mjs';
 
 const SUBJECT='Economics',STORAGE='economics-bank-v1',QUIZ_STORAGE='economics-quiz-v1';
 const $=selector=>document.querySelector(selector),icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
@@ -9,6 +10,7 @@ const iconButton=(action,name,label,extra='')=>`<button class="icon-button" data
 const hubHref=()=>location.pathname.endsWith('/biology/')||location.pathname.endsWith('/economics/')?'../':location.pathname.replace(/[^/]*$/,'');
 let bank,questionsById,sourcesById,view='home',collectionId='',page=1,libraryMode='questions',selected=new Set(),quiz=null,activeQuestion=null,exporting=false,sourcePdfBusy=new Set();
 let personal={version:1,bookmarks:[],collections:[],overrides:{},history:[]};
+let deepSeekApiKey='';
 let filters={search:'',topic:'',type:'',publisher:'',sort:'topic'},sourceFilters={search:'',topic:''};
 let toastTimer,searchTimer,documentState=null;
 const topicLabel=topic=>topic;
@@ -16,13 +18,17 @@ const topics=()=>bank?.topics || [];
 const topicOptions=(value='')=>`<option value="">All topics</option>${topics().map(t=>`<option value="${e(t)}" ${t===value?'selected':''}>${e(t)}</option>`).join('')}`;
 const topicOrder=topic=>topics().indexOf(topic)<0?999:topics().indexOf(topic);
 const effective=q=>({...q,...(personal.overrides[q.id] || {})});
-const icons=()=>{window.lucide?.createIcons();};
+const icons=()=>{if(view==='settings'&&!$('#deepseek-key-status'))$('#main .page-heading')?.insertAdjacentHTML('afterend',deepSeekSettingsMarkup(Boolean(deepSeekApiKey)));window.lucide?.createIcons();};
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),4200);}
 function save(){personal.history=personal.history.map((h,index)=>({...h,id:typeof h.id==='string'&&h.id?h.id:`history-${h.date}-${index}`,started:typeof h.started==='string'?h.started:h.date,answered:Number.isFinite(h.answered)?h.answered:h.correct,status:h.status==='left'?'left':'completed',mode:h.mode==='exercise'?'exercise':'exam'}));if(!writeStored(STORAGE,JSON.stringify({...personal,selected:[...selected]})))toast('Browser storage is unavailable.');}
 function saveQuiz(){
  if(quiz){if(!writeStored(QUIZ_STORAGE,JSON.stringify(quiz)))toast('Quiz progress could not be saved.');}
  else removeStored(QUIZ_STORAGE);
 }
+try{deepSeekApiKey=readDeepSeekApiKey();}catch{}
+const aiTutor=createDeepSeekTutor({subject:SUBJECT,getQuiz:()=>quiz,getQuestion:id=>effective(questionsById.get(id)),getApiKey:()=>deepSeekApiKey,saveQuiz,renderActiveQuiz:()=>{if(view==='quiz'&&quiz)renderActiveQuiz();}});
+bindDeepSeekControls({tutor:aiTutor,setApiKey:value=>{deepSeekApiKey=value;},openSettings:()=>navigate('settings'),refreshSettings:()=>{renderSettings();icons();},notify:toast});
+try{deepSeekApiKey=readDeepSeekApiKey();}catch{}
 function historyId(){return crypto.randomUUID?.() || `history-${Date.now()}-${Math.random().toString(36).slice(2)}`;}
 function recordQuizHistory(status='completed'){
  if(!quiz)return;
@@ -108,6 +114,12 @@ function renderActiveQuizV2(){
 const renderActiveQuizEconomics=renderActiveQuizV2;
 renderActiveQuiz=()=>{
  renderActiveQuizEconomics();
+ if(quiz&&view==='quiz'){
+  const question=quizQuestions()[quiz.current];
+  const selector=question?.type==='MC'?'#quiz-feedback':'.quiz-question-footer';
+  document.querySelector(selector)?.insertAdjacentHTML(question?.type==='MC'?'beforeend':'beforebegin',aiTutor.markup(question));
+  icons();
+ }
  if(quiz && !quiz.finished){
   $('.page-heading')?.insertAdjacentHTML('beforeend',`<button class="button secondary" data-action="leave-quiz">${icon('log-out')}Leave & save</button>`);
   $('.quiz-navigation')?.insertAdjacentHTML('beforeend',`<button class="text-button" data-action="leave-quiz">${icon('log-out')}Leave & save</button>`);
