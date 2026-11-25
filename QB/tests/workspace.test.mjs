@@ -42,6 +42,9 @@ test('Oxford catalog contains every unique source and all core and elective chap
   assert.ok(fs.existsSync(new URL('../'+source.downloadPath,import.meta.url)),source.name);
   assert.match(source.downloadPath,/\.docx$/);
   assert.match(source.downloadName,/\.docx$/);
+  assert.ok(fs.existsSync(new URL('../'+source.pdfPath,import.meta.url)),source.name+' PDF');
+  assert.match(source.pdfPath,/\.pdf$/);
+  assert.match(source.pdfName,/\.pdf$/);
   assert.match(source.name,/\.docx$/);
   assert.ok(source.original.endsWith('.docx'));
   const conversion=manifest.converted[source.original];

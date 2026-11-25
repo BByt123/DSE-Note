@@ -9,9 +9,14 @@ export async function prepareOxfordWord({resourceRoot=path.resolve('../resources
  for(const source of catalog.sources){
   const downloadPath=`bank/oxford/${source.id}.docx`;
   const wordPath=source.original.replace(/\.doc$/i,'.docx');
+  const pdfPath=`bank/oxford/${source.id}.pdf`;
+  const pdfSource=path.join(resourceRoot,path.dirname(wordPath),path.basename(wordPath,'.docx')+'.pdf');
   await fs.copyFile(path.join(resourceRoot,wordPath),downloadPath);
+  await fs.copyFile(pdfSource,pdfPath);
   source.downloadPath=downloadPath;
   source.downloadName=source.name;
+  source.pdfPath=pdfPath;
+  source.pdfName=source.name.replace(/\.docx$/i,'.pdf');
   const illustratedBook=source.wordEdition==='text'
    ?illustratedBooks.find(book=>book.topics?.includes(source.topic))
    :null;

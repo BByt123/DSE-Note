@@ -30,7 +30,7 @@ try{
  await page.locator('#source-publisher').selectOption('Oxford');
  await page.locator('#source-search').fill('qb_1A_ch01_e.docx');
  await page.waitForFunction(()=>document.querySelectorAll('.file-item').length===1);
- assert.equal(await action('download-source-pdf').count(),1);
+ assert.equal(await page.locator('.file-item .source-pdf').count(),1);
  const chapterWord=catalog.sources.find(source=>source.name==='qb_1A_ch01_e.docx');
  const wordDownload=await download(page.locator('.file-item .source-word'),'oxford-source.docx');
  assert.equal(wordDownload.suggestedFilename(),chapterWord.downloadName);
@@ -39,9 +39,9 @@ try{
  const viewerWord=await download(page.locator('.document-actions .source-word'),'oxford-viewer.docx');
  assert.equal(viewerWord.suggestedFilename(),chapterWord.downloadName);
  assert.deepEqual(await fs.readFile('test-results/oxford-viewer.docx'),await fs.readFile(chapterWord.downloadPath));
- const sourceDownload=await download(page.locator('.document-actions [data-action="download-source-pdf"]'),'oxford-source.pdf');
- assert.match(sourceDownload.suggestedFilename(),/text edition\)\.pdf$/);
- assert.equal(await page.locator('.document-actions [data-action="download-source-pdf"]').isEnabled(),true);
+ const sourceDownload=await download(page.locator('.document-actions .source-pdf'),'oxford-source.pdf');
+ assert.equal(sourceDownload.suggestedFilename(),chapterWord.pdfName);
+ assert.deepEqual(await fs.readFile('test-results/oxford-source.pdf'),await fs.readFile(chapterWord.pdfPath));
  await page.keyboard.press('Escape');
  await page.locator('#source-search').fill('qb_1A_ch02_e.docx');
  await page.waitForFunction(()=>document.querySelectorAll('.file-item').length===1);

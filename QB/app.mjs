@@ -120,6 +120,7 @@ function sourceWordButton(source){
  return `<a class="button secondary source-word" href="${e(target.downloadPath)}" download="${e(target.downloadName || target.name)}" title="${e(translate(label))}" aria-label="${e(translate(label))}">${icon('file-down')}<span>${e(translate(label))}</span></a>`;
 }
 function sourcePdfButton(source){
+ if(source.pdfPath && /\.pdf$/i.test(source.pdfPath))return `<a class="button secondary source-pdf" href="${e(source.pdfPath)}" download="${e(source.pdfName || source.name.replace(/\.docx?$/i,'.pdf'))}" title="Download PDF" aria-label="Download PDF">${icon('file-down')}<span>Download PDF</span></a>`;
  if(source.format!=='word-text')return `<a class="button secondary source-pdf" href="${e(source.path)}" download="${e(source.name)}" title="Download PDF" aria-label="Download PDF">${icon('file-down')}<span>Download PDF</span></a>`;
  return `<button class="button secondary source-pdf" data-action="download-source-pdf" data-id="${e(source.id)}" ${sourcePdfBusy.has(source.id)?'disabled':''} title="Download PDF (text edition)" aria-label="Download PDF (text edition)">${icon('file-down')}<span>${sourcePdfBusy.has(source.id)?'Preparing PDF...':'Download PDF'}</span></button>`;
 }

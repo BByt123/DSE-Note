@@ -59,7 +59,8 @@ try{
  assert.match(await page.locator('.document-actions .source-word').getAttribute('href'),/\.docx$/);
  assert.match(await page.locator('.document-actions .source-word').textContent(),/含圖片/);
  assert.ok(await page.locator('.word-image').count()>0);
- assert.equal(await page.locator('.document-actions [data-action="download-source-pdf"]').count(),1);
+ assert.equal(await page.locator('.document-actions .source-pdf').count(),1);
+ assert.match(await page.locator('.document-actions .source-pdf').getAttribute('href'),/\.pdf$/);
  await page.screenshot({path:'test-results/oxford-document.png'});
  await page.setViewportSize({width:375,height:844});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
