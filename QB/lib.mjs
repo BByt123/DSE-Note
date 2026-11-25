@@ -99,6 +99,25 @@ export function scoreQuiz(questions,responses) {
  const answered=questions.filter(q=>String(responses[q.id] || '').trim()).length;
  return {correct,total:gradable.length,answered,count:questions.length,percent:gradable.length ? Math.round(correct/gradable.length*100) : null};
 }
+export const MISTAKE_NOTEBOOK_ID='mistake-notebook';
+export const MISTAKE_NOTEBOOK_NAME='Mistake notebook';
+export const isMistakeNotebook=collection=>collection?.id===MISTAKE_NOTEBOOK_ID||collection?.name?.toLocaleLowerCase()===MISTAKE_NOTEBOOK_NAME.toLocaleLowerCase();
+export const findMistakeNotebook=personal=>personal.collections.find(isMistakeNotebook)||null;
+export function addIncorrectAnswersToNotebook(questions,responses,personal){
+ const wrongIds=[...new Set(questions.filter(question=>question.type==='MC'&&/^[A-D]$/.test(question.answer)&&/^[A-D]$/.test(responses[question.id]||'')&&responses[question.id]!==question.answer).map(question=>question.id))];
+ if(!wrongIds.length)return[];
+ let notebook=findMistakeNotebook(personal);
+ if(!notebook){notebook={id:MISTAKE_NOTEBOOK_ID,name:MISTAKE_NOTEBOOK_NAME,ids:[]};personal.collections.push(notebook);}
+ notebook.ids||=[];
+ const saved=new Set(personal.bookmarks),categorized=new Set(notebook.ids),changed=[];
+ for(const id of wrongIds){
+  let changedQuestion=false;
+  if(!saved.has(id)){personal.bookmarks.unshift(id);saved.add(id);changedQuestion=true;}
+  if(!categorized.has(id)){notebook.ids.push(id);categorized.add(id);changedQuestion=true;}
+  if(changedQuestion)changed.push(id);
+ }
+ return changed;
+}
 export function restoreQuiz(raw, validIds) {
  const known=new Set(validIds);
  if(!raw || !Array.isArray(raw.ids) || !raw.ids.length || raw.ids.length>50 || !raw.ids.every(id=>known.has(id)) || !raw.responses || typeof raw.responses!=='object') return null;

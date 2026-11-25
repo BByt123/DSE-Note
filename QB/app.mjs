@@ -1,4 +1,4 @@
-import {TYPES,escapeHtml as e,filterQuestions,sampleQuestions,scoreQuiz,validateBackup,restoreQuiz,readStored,writeStored,removeStored} from './lib.mjs';
+import {TYPES,escapeHtml as e,filterQuestions,sampleQuestions,scoreQuiz,addIncorrectAnswersToNotebook,findMistakeNotebook,isMistakeNotebook,MISTAKE_NOTEBOOK_NAME,validateBackup,restoreQuiz,readStored,writeStored,removeStored} from './lib.mjs';
 import {renderQuestion,sourcePage,sourcePageCount} from './rendering.mjs';
 import {exportPaper,exportSourcePdf,downloadBlob,chooseSaveLocation} from './exports.mjs';
 import {CHAPTERS,canonicalTopic,topicLabel,topicOrder} from './taxonomy.mjs';
@@ -30,7 +30,11 @@ try{deepSeekApiKey=readDeepSeekApiKey();}catch{}
 const aiTutor=createDeepSeekTutor({subject:'Biology',getQuiz:()=>quiz,getQuestion:id=>effective(questionsById.get(id)),getApiKey:()=>deepSeekApiKey,saveQuiz,renderActiveQuiz:()=>{if(view==='quiz'&&quiz)renderActiveQuiz();}});
 bindDeepSeekControls({tutor:aiTutor,setApiKey:value=>{deepSeekApiKey=value;},openSettings:()=>navigate('settings'),refreshSettings:()=>{renderSettings();icons();},notify:toast});
 const effective=q=>{const result={...q,...Object.fromEntries(Object.entries(personal.overrides[q.id] || {}).filter(([,v])=>v))};result.topic=canonicalTopic(result.topic);return result;};
-const icons=()=>{window.lucide?.createIcons();localize();};
+const icons=()=>{
+ if(view==='saved'&&!$('#add-saved-category'))$('.heading-actions')?.insertAdjacentHTML('afterbegin',`<button id="add-saved-category" class="button secondary" data-action="new-collection">${icon('folder-plus')}New category</button>`);
+ if(view==='collection'&&isMistakeNotebook(personal.collections.find(collection=>collection.id===collectionId)))$('[data-action="edit-collection"]')?.remove();
+ window.lucide?.createIcons();localize();
+};
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),4500);}
 function save(){if(!writeStored(STORAGE,JSON.stringify({...personal,selected:[...selected]})))toast('Browser storage is full or unavailable. Export a backup to keep your changes.');}
 function saveQuiz(){
@@ -228,6 +232,7 @@ async function renderDocumentPage(){
 }
 function collectionDialog(id=''){
  const c=personal.collections.find(c=>c.id===id);
+ if(c&&isMistakeNotebook(c))return;
  openModal(`${modalHeader(c?'Rename collection':'New collection')}<form class="dialog-body" data-form="collection" data-id="${e(id)}"><label>Collection name<input name="name" required maxlength="80" autofocus value="${e(c?.name || '')}" placeholder="e.g. Cell biology revision"></label><div class="form-actions">${c?`<button type="button" class="text-button danger-text" data-action="delete-collection" data-id="${e(c.id)}">Delete collection</button>`:''}<button class="button primary" type="submit">${icon('check')}${c?'Save name':'Create collection'}</button></div></form>`);
 }
 function saveCollectionDialog(){
@@ -273,7 +278,14 @@ function aiTutorMarkup(q){
 }
 function quizReviewMarkup(q,reveal){
  const max=Number.isFinite(Number(q.marks)) && Number(q.marks)>0?Number(q.marks):'';
- return `<div id="quiz-feedback" class="quiz-review" ${reveal?'':'hidden'}><h3>${q.type==='MC'?(q.answer?`Correct answer: ${e(q.answer)}`:'Answer key'):'Marking scheme'}</h3>${q.type!=='MC'?`<label class="mark-input">Awarded mark${max?` (out of ${max})`:''}<input id="written-mark" type="number" min="0" ${max?`max="${max}"`:''} step="1" value="${quiz.marks?.[q.id] ?? ''}" aria-label="Awarded mark"></label><p class="quiet">Written answers are self-assessed against the marking scheme.</p>`:''}<div id="quiz-answer-render" class="question-render"></div></div>`;
+ const response=quizResponse(q),incorrect=reveal&&q.type==='MC'&&/^[A-D]$/.test(q.answer||'')&&/^[A-D]$/.test(response)&&response!==q.answer;
+ const paperAction=incorrect?`<button class="button secondary mistake-paper-action" data-action="add-wrong-answer-to-paper" data-id="${e(q.id)}" ${selected.has(q.id)?'disabled':''}>${icon(selected.has(q.id)?'check':'plus')}${selected.has(q.id)?'Wrong answer added':'Add wrong answer to paper'}</button>`:'';
+ return `<div id="quiz-feedback" class="quiz-review" ${reveal?'':'hidden'}><h3>${q.type==='MC'?(q.answer?`Correct answer: ${e(q.answer)}`:'Answer key'):'Marking scheme'}</h3>${paperAction}${q.type!=='MC'?`<label class="mark-input">Awarded mark${max?` (out of ${max})`:''}<input id="written-mark" type="number" min="0" ${max?`max="${max}"`:''} step="1" value="${quiz.marks?.[q.id] ?? ''}" aria-label="Awarded mark"></label><p class="quiet">Written answers are self-assessed against the marking scheme.</p>`:''}<div id="quiz-answer-render" class="question-render"></div></div>`;
+}
+function addMistakeNotebookShortcut(){
+ const notebook=findMistakeNotebook(personal);
+ if(!quiz?.finished||!notebook||!quiz.ids.some(id=>notebook.ids.includes(id)))return;
+ $('.quiz-score')?.insertAdjacentHTML('beforeend',`<button class="button secondary" data-action="open-collection" data-id="${e(notebook.id)}">${icon('book-open')}Open ${e(MISTAKE_NOTEBOOK_NAME)}</button>`);
 }
 function historyId(){return crypto.randomUUID?.() || `history-${Date.now()}-${Math.random().toString(36).slice(2)}`;}
 function recordQuizHistory(status='completed'){
@@ -301,7 +313,7 @@ function renderQuiz(){
   quiz.current=Math.max(0,Math.min(quiz.current || 0,items.length-1));
   const q=items[quiz.current],result=scoreQuiz(items,quiz.responses),reveal=quizFeedbackVisible(q),atEnd=quiz.current===items.length-1;
   $('#main').innerHTML=`<section class="page-heading"><div><div class="eyebrow">${quiz.finished?'SESSION COMPLETE':'IN PRACTICE'}</div><h1>${quiz.finished?'Your quiz results':'Biology practice'}</h1><p>${items.length} questions · ${[...new Set(items.map(item=>item.topic))].length} topics · ${quiz.mode==='exercise'?'Exercise':'Exam'} mode</p></div><div class="heading-actions">${!quiz.finished&&quiz.deadline?`<span class="timer">${icon('timer')}<span id="quiz-timer"></span></span>`:''}<button class="button ${quiz.finished?'secondary':'primary'}" data-action="${quiz.finished?'new-quiz':'finish-quiz'}">${icon(quiz.finished?'plus':'flag')}${quiz.finished?'New quiz':'Finish quiz'}</button></div></section>${quiz.finished?`<section class="quiz-score"><div><strong>${result.percent===null?'Complete':result.percent+'%'}</strong><span>${result.total?'Multiple-choice score':'Written practice'}</span></div><div><strong>${result.correct} / ${result.total}</strong><span>Correct MC answers</span></div><div><strong>${result.answered} / ${result.count}</strong><span>Questions answered</span></div><button class="button secondary" data-action="quiz-to-paper">${icon('file-stack')}Add quiz to paper</button></section>`:''}<div class="quiz-workspace"><aside class="quiz-navigation"><h2>Questions</h2><div class="quiz-numbers">${items.map((item,i)=>{const itemReveal=quiz.finished||(quiz.mode==='exercise'&&quizResponse(item));const state=itemReveal&&item.answer?(quiz.responses[item.id]===item.answer?'correct':'incorrect'):'';return `<button class="${i===quiz.current?'current':''} ${quiz.responses[item.id]?'answered':''} ${state}" data-action="quiz-jump" data-index="${i}" aria-label="Question ${i+1}" ${i===quiz.current?'aria-current="step"':''}>${i+1}</button>`;}).join('')}</div><p class="quiet">${result.answered} of ${items.length} answered</p>${quiz.finished?'':'<button class="text-button danger-text" data-action="discard-quiz">Discard session</button>'}</aside><section class="quiz-question"><div class="quiz-question-heading"><span class="type-badge ${q.type.toLowerCase()}">${TYPES[q.type]}</span><span>Question ${quiz.current+1} of ${items.length}</span><span class="quiz-publisher">${e(q.publisher)}</span><span class="quiet">${e(q.code)}</span></div><div id="quiz-render" class="question-render"></div>${q.type==='MC'?`<fieldset class="answer-options"><legend>Your answer</legend>${['A','B','C','D'].map(letter=>{const state=reveal&&q.answer?(q.answer===letter?'correct-option':quiz.responses[q.id]===letter?'incorrect-option':''):'';return `<label class="answer-option ${quiz.responses[q.id]===letter?'chosen':''} ${state}"><input type="radio" name="quiz-answer" value="${letter}" ${quiz.responses[q.id]===letter?'checked':''} ${quiz.finished?'disabled':''}><span>${letter}</span>${reveal&&q.answer===letter?icon('check'):''}</label>`;}).join('')}</fieldset>`:`<label class="written-answer">Your answer<textarea id="written-answer" rows="6" placeholder="Write your response..." ${quiz.finished?'readonly':''}>${e(quiz.responses[q.id]||'')}</textarea></label>`}${quizReviewMarkup(q,reveal)}<div class="quiz-question-footer"><button class="button secondary" data-action="quiz-prev" ${quiz.current===0?'disabled':''}>${icon('chevron-left')}Previous</button><button class="button secondary" data-action="quiz-next">${atEnd?icon('check')+'Submit quiz':'Next'+icon('chevron-right')}</button></div></section></div>`;
-  icons();updateTimer();addQuizLeaveButtons();
+  icons();addMistakeNotebookShortcut();updateTimer();addQuizLeaveButtons();
   const savedInQuiz=personal.bookmarks.includes(q.id),bookmarkLabel=translate(savedInQuiz?'Remove bookmark':'Save question');
   $('.quiz-question-heading').insertAdjacentHTML('beforeend',`<button class="icon-button bookmark quiz-bookmark ${savedInQuiz?'is-saved':''}" data-action="bookmark" data-id="${e(q.id)}" aria-pressed="${savedInQuiz}" title="${e(bookmarkLabel)}" aria-label="${e(bookmarkLabel)}">${icon('bookmark')}</button>`);
   window.lucide?.createIcons();
@@ -318,6 +330,7 @@ function renderQuiz(){
  function finishQuiz(){
  if(!quiz || quiz.finished)return;
  quiz.finished=true;quiz.finishedAt=new Date().toISOString();
+  addIncorrectAnswersToNotebook(quizQuestions(),quiz.responses,personal);
   recordQuizHistory('completed');saveQuiz();if(view==='quiz')renderActiveQuiz();
 }
  function leaveQuiz(){
@@ -397,7 +410,7 @@ document.addEventListener('click',async event=>{
  else if(action==='new-collection')collectionDialog();
  else if(action==='edit-collection')collectionDialog(id);
  else if(action==='save-collection')saveCollectionDialog();
- else if(action==='delete-collection'){personal.collections=personal.collections.filter(c=>c.id!==id);save();$('#dialog').close();navigate('library');shell();toast('Collection deleted.');}
+ else if(action==='delete-collection'){const collection=personal.collections.find(c=>c.id===id);if(isMistakeNotebook(collection)){toast('Mistake notebook is managed automatically.');return;}personal.collections=personal.collections.filter(c=>c.id!==id);save();$('#dialog').close();navigate('library');shell();toast('Collection deleted.');}
  else if(action==='quiz-config'){
   if(quiz && !quiz.finished)openModal(`${modalHeader('Continue your quiz')}<div class="dialog-body"><p>You have a quiz in progress.</p><div class="form-actions"><button class="button secondary" data-action="replace-quiz">Start a new quiz</button><button class="button primary" data-action="resume-quiz">Resume quiz</button></div></div>`);
   else quizConfig();
@@ -473,6 +486,17 @@ $('#dialog').addEventListener('click',event=>{if(event.target===$('#dialog')){co
 window.addEventListener('hashchange',()=>{route();syncNavigation();$('#main')?.focus();});
 window.addEventListener('resize',syncNavigation);
 document.addEventListener('keydown',event=>{if(event.key==='Escape' && document.body.classList.contains('nav-open')){closeNavigation();$('[data-action="toggle-nav"]')?.focus();}});
+document.addEventListener('change',event=>{
+ const target=event.target;
+ if(target.name!=='quiz-answer'||!quiz||quiz.finished||quiz.mode!=='exercise')return;
+ const question=quizQuestions()[quiz.current];
+ if(question&&addIncorrectAnswersToNotebook([question],quiz.responses,personal).length){save();shell();}
+});
+document.addEventListener('click',event=>{
+ const button=event.target.closest('[data-action="add-wrong-answer-to-paper"]');
+ if(!button||!quiz||!quiz.ids.includes(button.dataset.id))return;
+ selected.add(button.dataset.id);save();renderPaper();renderActiveQuiz();toast('Wrong answer added to your paper.');
+});
 setInterval(updateTimer,1000);
 async function start(){
  try{

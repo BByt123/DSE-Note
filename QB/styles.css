@@ -466,4 +466,5 @@ main{max-width:1480px;padding:36px 38px 52px}
 .ai-chat-form .button{min-height:42px}
 .ai-loading{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px}
 .ai-error{color:#b42318;font-size:12px}
+.mistake-paper-action{margin-bottom:14px}
 @media(max-width:760px){.quiz-workspace{grid-template-columns:minmax(0,1fr);gap:20px}.quiz-navigation{border-right:0;border-bottom:1px solid var(--line);padding:0 0 16px;background:transparent}.quiz-navigation h2{display:block}.quiz-numbers{display:flex;flex-wrap:wrap}.quiz-question{padding:18px 16px}.page-heading>.button[data-action="leave-quiz"],.page-heading .heading-actions [data-action="leave-quiz"]{display:none}.ai-settings-section{flex-direction:column;gap:16px}.ai-key-form{width:100%;min-width:0}.ai-key-actions .button{min-height:42px}.ai-chat-message{max-width:100%}.ai-chat-form{grid-template-columns:minmax(0,1fr)}.ai-chat-form label{grid-column:1}.ai-chat-form .button{justify-self:start}}
