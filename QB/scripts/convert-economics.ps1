@@ -1,15 +1,20 @@
 param(
     [string]$ResourcePath = '',
-    [string]$OutputPath = ''
+    [string]$OutputPath = '',
+    [switch]$Pdf
 )
 
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $ResourcePath) { $ResourcePath = Join-Path $root '../Econ resources/Pearson by topic' }
-if (-not $OutputPath) { $OutputPath = Join-Path $root 'bank/economics/files' }
+if (-not $OutputPath) {
+    $OutputPath = if ($Pdf) { Join-Path $root '../Econ resources/Pearson by topic/PDF' } else { Join-Path $root 'bank/economics/files' }
+}
 $ResourcePath = [IO.Path]::GetFullPath($ResourcePath)
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
-New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
+$extension = if ($Pdf) { '.pdf' } else { '.docx' }
+$files = @(Get-ChildItem -LiteralPath $ResourcePath -File -Filter '*.doc' | Sort-Object Name)
+if (-not $files.Count) { throw "No Economics DOC files found in $ResourcePath" }
 
 $word = $null
 try {
@@ -17,13 +22,15 @@ try {
     $word.Visible = $false
     $word.DisplayAlerts = 0
     $word.AutomationSecurity = 3
-    foreach ($file in Get-ChildItem -LiteralPath $ResourcePath -File -Filter '*.doc' | Sort-Object Name) {
-        $target = Join-Path $OutputPath ($file.BaseName + '.docx')
+    New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
+    foreach ($file in $files) {
+        $target = Join-Path $OutputPath ($file.BaseName + $extension)
         $document = $null
         try {
             Write-Output "Converting $($file.Name)"
             $document = $word.Documents.Open($file.FullName, $false, $true, $false, '', '', $false, '', '', 0, 0, $false, $true, 0, $true)
-            $document.SaveAs2($target, 16)
+            if ($Pdf) { $document.ExportAsFixedFormat($target, 17) }
+            else { $document.SaveAs2($target, 16) }
         } finally {
             if ($null -ne $document) {
                 $document.Close(0)
@@ -40,4 +47,4 @@ try {
         [void][Runtime.InteropServices.Marshal]::ReleaseComObject($word)
     }
 }
-Write-Output "Converted Economics DOC files to DOCX in $OutputPath"
+Write-Output "Converted $($files.Count) Economics DOC files to $extension in $OutputPath"

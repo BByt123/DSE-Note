@@ -14,6 +14,7 @@ if(!files.length)throw new Error(`No Economics DOC files found under ${root}`);
 await fs.mkdir(path.join(output,'files'),{recursive:true});
 await fs.mkdir(path.join(output,'text'),{recursive:true});
 await fs.mkdir(path.join(output,'originals'),{recursive:true});
+await fs.mkdir(path.join(output,'pdf'),{recursive:true});
 
 const topicNames={
  '1':'What is economics?','2':'The three basic economic problems','3':'Demand and supply','4':'Changes in demand and supply','5':'Price elasticity of demand and supply','6':'Market intervention (I)','7':'Market intervention (II)','8':'Ownership of firms','9':'Production and division of labour','10':'Factors of production','11':'Production in the short run and long run','12':'Expansion of firms','13':'Market and market structure','14':'Profit maximisation and output determination','15':'Consumer surplus and producer surplus','16':'Competition and efficiency','17':'The roles of government (I): market failure','18':'The roles of government (II)','19':'Monopoly pricing','20':'Anti-competitive behaviours'
@@ -70,7 +71,14 @@ for(const filename of files){
   await fs.writeFile(outputDocx,await Packer.toBuffer(doc));
  }
  const topic=sourceTopic(meta);
- sources.push({id:sourceId,name:numbered,title:topic,publisher:'Pearson',path:`bank/economics/text/${textName}`,textPath:`bank/economics/text/${textName}`,downloadPath:`bank/economics/files/${numbered}`,downloadName:numbered,originalDownloadPath:`bank/economics/originals/${filename}`,originalDownloadName:filename,format:'word-text',wordEdition:mediaPreserved?'original':'text',conversionStatus:mediaPreserved?'word':'text-only',mediaPreserved,topic,topics:[topic],pages:null,questionCount:0,original:filename,sourceCode:String(number).padStart(3,'0')});
+ const pdfName=numbered.replace(/\.docx$/,'.pdf');
+ const publishedPdf=path.join(output,'pdf',pdfName);
+ await fs.copyFile(path.join(root,'PDF',pdfName),publishedPdf).catch(error=>{if(error.code!=='ENOENT')throw error;});
+ const hasPublishedPdf=await fs.stat(publishedPdf).then(file=>file.isFile()&&file.size>0,error=>{
+  if(error.code==='ENOENT')return false;
+  throw error;
+ });
+ sources.push({id:sourceId,name:numbered,title:topic,publisher:'Pearson',path:`bank/economics/text/${textName}`,textPath:`bank/economics/text/${textName}`,downloadPath:`bank/economics/files/${numbered}`,downloadName:numbered,originalDownloadPath:`bank/economics/originals/${filename}`,originalDownloadName:filename,format:'word-text',wordEdition:mediaPreserved?'original':'text',conversionStatus:mediaPreserved?'word':'text-only',mediaPreserved,topic,topics:[topic],pages:null,questionCount:0,original:filename,sourceCode:String(number).padStart(3,'0'),...(hasPublishedPdf?{pdfPath:`bank/economics/pdf/${pdfName}`,pdfName}:{})});
 }
 const questions=[];
 for(const source of sources){const text=await fs.readFile(path.join(output,'text',path.basename(source.textPath)),'utf8');const items=parseQuestions(text,source.id);source.questionCount=items.length;questions.push(...items);}

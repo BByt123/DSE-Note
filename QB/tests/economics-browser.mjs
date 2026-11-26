@@ -54,9 +54,11 @@ try {
   assert.equal(await quizBookmark.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(255, 255, 255)');
   assert.notEqual(await quizBookmark.evaluate(button => getComputedStyle(button.querySelector('svg')).stroke), 'rgb(244, 197, 66)');
   await quizBookmark.click();
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.quiz-bookmark svg')).stroke === 'rgb(244, 197, 66)');
   assert.equal(await action('bookmark').evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(255, 255, 255)');
   assert.equal(await action('bookmark').evaluate(button => getComputedStyle(button.querySelector('svg')).stroke), 'rgb(244, 197, 66)');
   await action('bookmark').click();
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.quiz-bookmark svg')).stroke === 'rgb(98, 113, 107)');
   assert.equal(await action('bookmark').evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(255, 255, 255)');
   assert.notEqual(await action('bookmark').evaluate(button => getComputedStyle(button.querySelector('svg')).stroke), 'rgb(244, 197, 66)');
   await action('bookmark').click();
@@ -71,15 +73,16 @@ try {
   assert.match(await page.locator('.file-item .source-original').first().getAttribute('href'), /\.doc$/);
   await download(page.locator('.file-item .source-word').first(), '.docx');
   await download(page.locator('.file-item .source-original').first(), '.doc');
+  const sourcePdf = page.locator('.file-item .source-pdf').first();
+  assert.equal(await sourcePdf.getAttribute('href'), 'bank/economics/pdf/101.pdf');
+  const pdf = await download(sourcePdf, '.pdf');
+  const pdfBytes = await fs.readFile(await pdf.path());
+  const expectedPdf = await fs.readFile(new URL('../bank/economics/pdf/101.pdf', import.meta.url));
+  assert.ok(pdfBytes.equals(expectedPdf));
   await page.locator('.file-item-title').first().click();
-  await page.locator('.document-content').waitFor();
-  const sourceManifest = await page.evaluate(async () => await (await fetch('bank/economics/index.json')).json());
-  const firstSource = sourceManifest.sources[0];
-  if (firstSource.mediaPreserved) {
-    assert.match(await page.locator('.preview-notice').textContent(), /downloadable Word edition/);
-  } else {
-    assert.match(await page.locator('.preview-notice').textContent(), /original DOC/);
-  }
+  await page.locator('.document-page-image[alt="101.pdf · Page 1"]').waitFor();
+  await action('document-next').click();
+  await page.locator('.document-page-image[alt="101.pdf · Page 2"]').waitFor();
   assert.equal(await page.locator('.document-actions .source-original').count(), 1);
   await download(page.locator('.document-actions .source-pdf'), '.pdf');
 

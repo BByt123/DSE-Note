@@ -17,13 +17,16 @@ test('Economics bank keeps renamed sources, topics and questions together', () =
   assert.deepEqual(bank.sources.slice(0, 3).map(source => source.sourceCode), ['101', '102', '103']);
 });
 
-test('Economics source downloads expose both web editions and untouched media-safe originals', () => {
+test('Economics sources expose the converted chapter PDF and both Word editions', () => {
   for (const source of bank.sources) {
     assert.ok(['text', 'original'].includes(source.wordEdition), source.name);
     assert.equal(source.mediaPreserved, source.wordEdition === 'original', source.name);
     assert.equal(source.conversionStatus, source.mediaPreserved ? 'word' : 'text-only', source.name);
     assert.match(source.downloadPath, /\.docx$/);
     assert.match(source.originalDownloadPath, /\.doc$/);
+    assert.equal(source.pdfName, `${source.sourceCode}.pdf`);
+    assert.equal(source.pdfPath, `bank/economics/pdf/${source.pdfName}`);
+    assert.equal(fs.readFileSync(new URL(source.pdfPath, root)).subarray(0, 5).toString(), '%PDF-', source.pdfName);
     assert.equal(fs.readFileSync(new URL(`../${source.downloadPath}`, import.meta.url)).subarray(0, 2).toString(), 'PK', source.name);
     assert.equal(fs.readFileSync(new URL(`../${source.originalDownloadPath}`, import.meta.url)).subarray(0, 2).toString('hex'), 'd0cf', source.name);
     assert.equal(source.questionCount, bank.questions.filter(question => question.sourceId === source.id).length, source.name);

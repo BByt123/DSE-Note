@@ -32,6 +32,10 @@ test('DeepSeek prompts enforce English HKDSE subject guidance and include answer
  assert.equal(body.model,'deepseek-chat');
  assert.match(body.messages[0].content,/Always answer in clear English/);
  assert.match(body.messages[0].content,/HKDSE Biology/);
+ assert.match(body.messages[0].content,/full English names.*carbon dioxide, oxygen, water, and glucose/);
+ assert.match(body.messages[0].content,/Avoid chemical formulae and element symbols/);
+ assert.match(body.messages[0].content,/Use word equations/);
+ assert.match(body.messages[0].content,/explicitly assesses.*required notation alongside the relevant names/);
  assert.match(body.messages[1].content,/why the keyed answer is correct/);
  for(const option of ['A. Breathing','B. Sweating','C. Eating','D. Digestion'])assert.ok(body.messages[1].content.includes(option));
  assert.equal(body.messages.at(-1).content,'Why is breathing wrong?');
@@ -60,6 +64,7 @@ test('written-question prompts give marking-scheme-based HKDSE guidance in Engli
  },async(_url,request)=>{prompt=JSON.parse(request.body).messages;return{ok:true,json:async()=>({choices:[{message:{content:'Identify the next-best alternative that is given up.'}}]})};});
  assert.match(prompt[0].content,/English/);
  assert.match(prompt[0].content,/HKDSE Economics/);
+ assert.doesNotMatch(prompt[0].content,/Avoid chemical formulae/);
  assert.match(prompt[1].content,/step by step/);
  assert.match(prompt[1].content,/The next best alternative forgone/);
  assert.match(prompt[1].content,/I am not sure how to start/);
